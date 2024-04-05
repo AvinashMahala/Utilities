@@ -1,7 +1,9 @@
 from google_flight_analysis.scrape import Scrape, ScrapeObjects
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 from openpyxl import Workbook
+from openpyxl.reader.excel import load_workbook
+
 
 class FlightData:
     def __init__(self, direction, data):
@@ -38,21 +40,27 @@ class FlightData:
         return [self.direction, self.departure_datetime, self.arrival_datetime, self.origin, self.destination,
                 self.airlines, self.travel_time, self.price, self.num_stops, self.layover,
                 self.access_date, self.co2_emission, self.emission_diff]
-def generate_filename(prefix='flight_data', extension='xlsx'):
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f"{prefix}_{timestamp}.{extension}"
+def generate_filename(start_date, end_date, start_interval, end_interval, prefix='lowest_prices', extension='xlsx'):
+    start_date_str = start_date.strftime('%Y%m%d')
+    end_date_str = end_date.strftime('%Y%m%d')
+    interval_str = f"{start_interval}_{end_interval}"
+    timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"{prefix}_{start_date_str}_{end_date_str}_{interval_str}_{timestamp_str}.{extension}"
     return filename
 def write_to_excel(lowest_price_up, lowest_price_down, filename):
-    # Create a new Workbook
-    wb = Workbook()
-    # Select the active worksheet
-    ws = wb.active
-
-    # Write column headers
-    headers = ['Direction', 'Departure datetime', 'Arrival datetime', 'Origin', 'Destination',
-               'Airline(s)', 'Travel Time', 'Price ($)', 'Num Stops', 'Layover',
-               'Access Date', 'CO2 Emission (kg)', 'Emission Diff (%)']
-    ws.append(headers)
+    try:
+        # Load existing workbook
+        wb = load_workbook(filename)
+        ws = wb.active
+    except FileNotFoundError:
+        # Create a new Workbook if the file does not exist
+        wb = Workbook()
+        ws = wb.active
+        # Write column headers
+        headers = ['Direction', 'Departure datetime', 'Arrival datetime', 'Origin', 'Destination',
+                   'Airline(s)', 'Travel Time', 'Price ($)', 'Num Stops', 'Layover',
+                   'Access Date', 'CO2 Emission (kg)', 'Emission Diff (%)']
+        ws.append(headers)
 
     # Write data for lowest price up
     ws.append(lowest_price_up.to_list())
@@ -62,6 +70,8 @@ def write_to_excel(lowest_price_up, lowest_price_down, filename):
 
     # Save the workbook
     wb.save(filename)
+
+
 def print_flight_data(flight_data):
     # Set option to display all columns
     pd.set_option('display.max_columns', None)
@@ -93,18 +103,7 @@ def print_flight_data(flight_data):
     print("-------Output-----------------------------------------------------------------------------")
     print(flight_data_renamed)
     print("------------------------------------------------------------------------------------------")
-def print_lowest_price_table(lowest_price_up, lowest_price_down):
-    # Concatenate the 'Up' and 'Down' DataFrames
-    lowest_price_table_up = FlightData('up', lowest_price_up)
-    lowest_price_table_down = FlightData('down', lowest_price_down)
 
-    # Print the tabular format
-    print("Tabular Format:")
-    # print(combined_table)
-    lowest_price_table_up.print_flight_data_obj()
-    lowest_price_table_down.print_flight_data_obj()
-    f_name = generate_filename('lowest_prices', 'xlsx')
-    write_to_excel(lowest_price_table_up, lowest_price_table_down, f_name)
 def find_lowest_price_rows(dataframe):
     # Check if the dataframe is empty
     if dataframe.empty:
@@ -175,28 +174,76 @@ def scrape_flight_data(origin, destination, start_date, end_date):
 
     # Return the queried representation of result
     return result.data
+
+def generate_date_combinations(start_date,end_date,start_interval=0, end_interval=0):
+    date_combinations = []
+    current_start_date = start_date
+    current_end_date = end_date
+
+    while current_start_date < current_end_date:
+        current_start = current_start_date.strftime('%Y-%m-%d')
+        current_end = current_end_date.strftime('%Y-%m-%d')
+        date_combinations.append((current_start, current_end))
+        current_start_date += timedelta(days=start_interval)
+        current_end_date += timedelta(days=end_interval)
+
+    return date_combinations # [('2024-07-20', '2024-08-20'), ('2024-07-22', '2024-08-23'), ('2024-07-24', '2024-08-26'),.......]
+
+
 def main():
     # Input parameters
     destination = 'BBI'  # Origin
     origin = 'DFW'  # Destination
+    start_date_main_str = '2024-05-02'
+    end_date_main_str = '2024-05-20'
 
-    start_date = '2024-07-20'
-    end_date = '2024-08-20'
+    # Convert start_date_main_str and end_date_main_str to datetime objects
+    start_date_main = datetime.strptime(start_date_main_str, '%Y-%m-%d')
+    end_date_main = datetime.strptime(end_date_main_str, '%Y-%m-%d')
 
-    # Scrape flight data
-    flight_data = scrape_flight_data(origin, destination, start_date, end_date)
+    # Define start and end intervals
+    start_interval = 1
+    end_interval = 0
 
-    # Add Direction Column
-    updated_flight_data = add_direction_column(flight_data)
-    f_name = generate_filename()
-    save_flight_data_to_excel(flight_data, f_name)
-    print("Data Saved to Excel: \n", f_name)  # Output: flight_data_20220406_115923.xlsx
+    # Generate date combinations
+    date_combinations = generate_date_combinations(start_date_main, end_date_main, start_interval, end_interval)
 
-    # # Lowest Price Up and Down:
-    lowest_price_up, lowest_price_down = find_lowest_price_rows(flight_data)
+    print("Date Combinations:")
+    for start_date, end_date in date_combinations:
+        print(f"Start Date: {start_date}, End Date: {end_date}")
 
-    # Example usage:
-    print_lowest_price_table(lowest_price_up, lowest_price_down)
+    f_name = generate_filename(start_date_main, end_date_main, start_interval, end_interval)
+    print("Generated filename:", f_name)
+
+    # Iterate over date combinations
+    for start_date, end_date in date_combinations:
+        print("\n----------------------------------------")
+        print(f"Scraping flight data for period {start_date} to {end_date}...")
+        # Scrape flight data
+        flight_data = scrape_flight_data(origin, destination, start_date, end_date)
+        # Add Direction Column
+        updated_flight_data = add_direction_column(flight_data)
+        # Find lowest price for up and down flights
+        up_lowest_price, down_lowest_price = find_lowest_price_rows(flight_data)
+
+        # Print lowest price details
+        print("Lowest Price Details:")
+        print(f"Up flight: {up_lowest_price}")
+        print(f"Down flight: {down_lowest_price}")
+
+        # Concatenate the 'Up' and 'Down' DataFrames
+        up_lowest_price_table = FlightData('up', up_lowest_price)
+        down_lowest_price_table = FlightData('down', down_lowest_price)
+
+        # Write to Excel
+        print(f"Writing to Excel file: {f_name}")
+        write_to_excel(up_lowest_price_table, down_lowest_price_table, f_name)
+        print("Data Saved to Excel.")
+        print("----------------------------------------\n")
+
+
+if __name__ == "__main__":
+    main()
 
 if __name__ == "__main__":
     main()
