@@ -3,7 +3,6 @@ import pandas as pd
 from datetime import datetime
 from openpyxl import Workbook
 
-
 class FlightData:
     def __init__(self, direction, data):
         self.direction = direction
@@ -39,8 +38,10 @@ class FlightData:
         return [self.direction, self.departure_datetime, self.arrival_datetime, self.origin, self.destination,
                 self.airlines, self.travel_time, self.price, self.num_stops, self.layover,
                 self.access_date, self.co2_emission, self.emission_diff]
-
-
+def generate_filename(prefix='flight_data', extension='xlsx'):
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"{prefix}_{timestamp}.{extension}"
+    return filename
 def write_to_excel(lowest_price_up, lowest_price_down, filename):
     # Create a new Workbook
     wb = Workbook()
@@ -61,43 +62,6 @@ def write_to_excel(lowest_price_up, lowest_price_down, filename):
 
     # Save the workbook
     wb.save(filename)
-
-
-def generate_filename(prefix='flight_data', extension='xlsx'):
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f"{prefix}_{timestamp}.{extension}"
-    return filename
-
-
-def save_flight_data_to_excel(flight_data, filename):
-    # Define the new column names and order
-    new_column_names = {
-        'Departure datetime': 'Departure Date',
-        'Arrival datetime': 'Arrival Date',
-        'Origin': 'From',
-        'Destination': 'To',
-        'Airline(s)': 'Airline',
-        'Travel Time': 'Duration',
-        'Price ($)': 'Price',
-        'Num Stops': 'Number of Stops',
-        'Layover': 'Layover Time',
-        'Access Date': 'Accessed Date',
-        'CO2 Emission (kg)': 'CO2 Emission',
-        'Emission Diff (%)': 'Emission Difference'
-    }
-
-    # Define the desired column order
-    column_order = ['Departure Date', 'Arrival Date', 'From', 'To', 'Airline',
-                    'Duration', 'Price', 'Number of Stops', 'Layover Time',
-                    'Accessed Date', 'CO2 Emission', 'Emission Difference']
-
-    # Rename columns and reorder them
-    flight_data_renamed = flight_data.rename(columns=new_column_names)[column_order]
-
-    # Save DataFrame to Excel
-    flight_data_renamed.to_excel(filename, index=False)
-
-
 def print_flight_data(flight_data):
     # Set option to display all columns
     pd.set_option('display.max_columns', None)
@@ -129,8 +93,18 @@ def print_flight_data(flight_data):
     print("-------Output-----------------------------------------------------------------------------")
     print(flight_data_renamed)
     print("------------------------------------------------------------------------------------------")
+def print_lowest_price_table(lowest_price_up, lowest_price_down):
+    # Concatenate the 'Up' and 'Down' DataFrames
+    lowest_price_table_up = FlightData('up', lowest_price_up)
+    lowest_price_table_down = FlightData('down', lowest_price_down)
 
-
+    # Print the tabular format
+    print("Tabular Format:")
+    # print(combined_table)
+    lowest_price_table_up.print_flight_data_obj()
+    lowest_price_table_down.print_flight_data_obj()
+    f_name = generate_filename('lowest_prices', 'xlsx')
+    write_to_excel(lowest_price_table_up, lowest_price_table_down, f_name)
 def find_lowest_price_rows(dataframe):
     # Check if the dataframe is empty
     if dataframe.empty:
@@ -145,8 +119,33 @@ def find_lowest_price_rows(dataframe):
     lowest_price_down = down_flights.loc[down_flights['Price ($)'].idxmin()]
 
     return lowest_price_up, lowest_price_down
+def save_flight_data_to_excel(flight_data, filename):
+    # Define the new column names and order
+    new_column_names = {
+        'Departure datetime': 'Departure Date',
+        'Arrival datetime': 'Arrival Date',
+        'Origin': 'From',
+        'Destination': 'To',
+        'Airline(s)': 'Airline',
+        'Travel Time': 'Duration',
+        'Price ($)': 'Price',
+        'Num Stops': 'Number of Stops',
+        'Layover': 'Layover Time',
+        'Access Date': 'Accessed Date',
+        'CO2 Emission (kg)': 'CO2 Emission',
+        'Emission Diff (%)': 'Emission Difference'
+    }
 
+    # Define the desired column order
+    column_order = ['Departure Date', 'Arrival Date', 'From', 'To', 'Airline',
+                    'Duration', 'Price', 'Number of Stops', 'Layover Time',
+                    'Accessed Date', 'CO2 Emission', 'Emission Difference']
 
+    # Rename columns and reorder them
+    flight_data_renamed = flight_data.rename(columns=new_column_names)[column_order]
+
+    # Save DataFrame to Excel
+    flight_data_renamed.to_excel(filename, index=False)
 def add_direction_column(dataframe):
     # Check if the DataFrame is empty
     if dataframe.empty:
@@ -167,8 +166,6 @@ def add_direction_column(dataframe):
     dataframe['Direction'] = directions
 
     return dataframe
-
-
 def scrape_flight_data(origin, destination, start_date, end_date):
     # Obtain our scrape object, represents our query
     result = Scrape(origin, destination, start_date, end_date)
@@ -178,23 +175,6 @@ def scrape_flight_data(origin, destination, start_date, end_date):
 
     # Return the queried representation of result
     return result.data
-
-
-def print_lowest_price_table(lowest_price_up, lowest_price_down):
-    # Concatenate the 'Up' and 'Down' DataFrames
-    # lowest_price_table={}
-    lowest_price_table_up = FlightData('up', lowest_price_up)
-    lowest_price_table_down = FlightData('down', lowest_price_down)
-
-    # Print the tabular format
-    print("Tabular Format:")
-    # print(combined_table)
-    lowest_price_table_up.print_flight_data_obj()
-    lowest_price_table_down.print_flight_data_obj()
-    f_name = generate_filename('lowest_prices', 'xlsx')
-    write_to_excel(lowest_price_table_up, lowest_price_table_down, f_name)
-
-
 def main():
     # Input parameters
     destination = 'BBI'  # Origin
@@ -208,9 +188,6 @@ def main():
 
     # Add Direction Column
     updated_flight_data = add_direction_column(flight_data)
-
-    # Print flight data
-    # print_flight_data(flight_data)
     f_name = generate_filename()
     save_flight_data_to_excel(flight_data, f_name)
     print("Data Saved to Excel: \n", f_name)  # Output: flight_data_20220406_115923.xlsx
@@ -220,7 +197,6 @@ def main():
 
     # Example usage:
     print_lowest_price_table(lowest_price_up, lowest_price_down)
-
 
 if __name__ == "__main__":
     main()
